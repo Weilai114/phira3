@@ -7,10 +7,10 @@ use crate::{get_data, get_data_mut, save_data};
 use anyhow::{Context, Result};
 use macroquad::prelude::*;
 use prpr::{
-    core::{ParticleEmitter, ResourcePack},
-    ext::{create_audio_manger, screen_aspect, semi_black, RectExt, SafeTexture},
+    core::ResourcePack,
+    ext::{create_audio_manger, screen_aspect, semi_black, RectExt},
     time::TimeManager,
-    ui::{Slider, Ui},
+    ui::{Slider, Ui}
 };
 use sasa::{AudioClip, AudioManager, Music, MusicParams, PlaySfxParams, Sfx};
 
@@ -20,8 +20,6 @@ pub struct OffsetPage {
     cali_hit: Sfx,
 
     tm: TimeManager,
-    _hit_fx: SafeTexture,
-    emitter: ParticleEmitter,
     color: Color,
 
     slider: Slider,
@@ -36,11 +34,13 @@ impl OffsetPage {
     const FADE_TIME: f32 = 0.8;
 
     pub async fn new() -> Result<Self> {
+        let config = &get_data().config;
         let mut audio = create_audio_manger(&get_data().config)?;
         let cali = audio.create_music(
             AudioClip::new(load_file("cali.ogg").await?)?,
             MusicParams {
                 loop_mix_time: 0.,
+                amplifier: config.volume_music,
                 ..Default::default()
             },
         )?;
@@ -49,10 +49,9 @@ impl OffsetPage {
         let mut tm = TimeManager::new(1., true);
         tm.force = 3e-2;
 
-        let respack = ResourcePack::from_path(get_data().config.res_pack_path.as_ref())
+        let respack = ResourcePack::from_path(config.res_pack_path.as_ref())
             .await
             .context("Failed to load resource pack")?;
-        let emitter = ParticleEmitter::new(&respack, get_data().config.note_scale, respack.info.hide_particles)?;
 
         let latency_record: VecDeque<f32> = VecDeque::new();
         Ok(Self {
@@ -61,8 +60,6 @@ impl OffsetPage {
             cali_hit,
 
             tm,
-            _hit_fx: respack.hit_fx,
-            emitter,
             color: respack.info.fx_perfect(),
 
             slider: Slider::new(-200.0..800.0, 1.),
@@ -157,6 +154,7 @@ impl Page for OffsetPage {
     fn render(&mut self, ui: &mut Ui, s: &mut SharedState) -> Result<()> {
         let t = s.t;
         let aspect = 1. / screen_aspect();
+        let config = &get_data().config;
         s.render_fader(ui, |ui| {
             let lf = -0.97;
             let mut r = ui.content_rect();
@@ -170,7 +168,6 @@ impl Page for OffsetPage {
 
             let ot = t;
 
-            let config = &get_data().config;
             let mut t = self.tm.now() as f32 - config.offset;
 
             if t < 0. {
@@ -239,8 +236,6 @@ impl Page for OffsetPage {
             let value = base.log(10.0);
             value * x.signum()
         }
-
-        self.emitter.draw(get_frame_time());
 
         Ok(())
     }
